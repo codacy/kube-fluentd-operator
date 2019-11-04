@@ -16,7 +16,7 @@ datasource: default
 defaultConfigmap: "fluentd-config"
 
 image:
-  repository: jvassev/kube-fluentd-operator
+  repository: codacy/kube-fluentd-operator
   pullPolicy: IfNotPresent
   tag: latest
   pullSecret: ""
