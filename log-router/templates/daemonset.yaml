@@ -105,16 +105,9 @@ spec:
           - --label-selector={{- range $k, $v := .Values.labelSelector.matchLabels }}{{$k}}={{$v}},
           {{- end }}
           {{- end }}
-          {{- if .Values.enforceNamespaces }}
-          {{- if .Values.namespaces}}
-          {{- range  .Values.namespaces }}
+          {{- if .Values.useReleaseNamespaceOnly }}
           - --namespaces
-          - "{{ . }}"
-          {{- end }}
-          {{- else }}
-          - --namespaces
-          - "{{ .Release.Namespace }}"          
-          {{- end }}
+          - "{{ .Release.Namespace }}"
           {{- else }}
           {{- range  .Values.namespaces }}
           - --namespaces
