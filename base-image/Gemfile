@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # pin fluentd, probably a good idea to pin all gems
-gem "fluentd", "1.5.2"
+gem "fluentd", "1.7.4"
 
 gem 'ffi'
 gem 'fluent-plugin-amqp'
@@ -41,5 +41,8 @@ gem 'fluent-plugin-secure-forward'
 gem 'fluent-plugin-splunkhec'
 gem 'fluent-plugin-sumologic_output'
 gem 'fluent-plugin-systemd'
+gem 'fluent-plugin-uri-parser'
+gem 'fluent-plugin-verticajson'
+gem 'fluent-plugin-vmware-loginsight'
 gem 'gelf'
 gem 'logfmt'
