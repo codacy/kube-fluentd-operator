@@ -13,10 +13,8 @@ serviceAccountName: "default"
 # Possible values: default|fake|fs|multimap
 datasource: default
 
-defaultConfigmap: "fluentd-config"
-
 image:
-  repository: codacy/kube-fluentd-operator
+  repository: jvassev/kube-fluentd-operator
   pullPolicy: IfNotPresent
   tag: latest
   pullSecret: ""
