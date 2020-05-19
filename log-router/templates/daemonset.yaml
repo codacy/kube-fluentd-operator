@@ -117,6 +117,9 @@ spec:
           - --namespaces
           - "{{ . }}"
           {{- end }}
+          {{- if .Values.allowTagExpansion }}
+          - --allow-tag-expansion
+          {{- end }}
           {{- end }}
           volumeMounts:
           - name: fluentconf
