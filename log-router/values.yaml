@@ -10,8 +10,12 @@ rbac:
 
 serviceAccountName: "default"
 
-# Possible values: default|fake|fs|multimap
+# Possible values: default|fake|fs|multimap|crd
 datasource: default
+
+# Use with datasource: default or datasource: multimap, crdMigrationMode enables also the crd datasource
+# together with the specified legacy datasource to facilitate the migration process to CRDs.
+crdMigrationMode: false
 
 defaultConfigmap: "fluentd-config"
 
@@ -75,6 +79,8 @@ tolerations: []
   #  cpu: 100m
   #  memory: 128Mi
 
+priorityClassName: ""
+
 updateStrategy: {}
 #  type: RollingUpdate
 
@@ -88,4 +94,19 @@ prometheusEnabled: false
 # Otherwise, it will capture logs from all namespaces.
 useReleaseNamespaceOnly: false
 
+serviceMonitor:
+    # enable support for Prometheus Operator
+    enabled: false
+
+    # Job label for scrape target
+    jobLabel: app
+
+    # Scrape interval. If not set, the Prometheus default scrape interval is used.
+    interval: ""
+
 allowTagExpansion: false
+
+# Change the following value to define a different namespace that is treated as admin
+# namespace, i.e. its configs are not validated or processed and virtual plugins can be
+# defined to be used in all other namespaces.
+adminNamespace: "kube-system"
