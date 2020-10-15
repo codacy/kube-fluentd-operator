@@ -62,6 +62,7 @@ workflows:
             branches:
               only:
                 - master
+                - feature/custom-stdout
       - codacy/helm_push:
           name: helm_push_external
           context: CodacyHelm
@@ -70,6 +71,10 @@ workflows:
           charts_repo_url: "https://charts.codacy.com/external"
           requires:
             - docker_push
+          filters:
+            branches:
+              only:
+                - master
       - codacy/tag_version:
           name: tag_version
           requires:
