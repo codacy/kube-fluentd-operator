@@ -45,7 +45,7 @@ func TestTagsRewrittenOk(t *testing.T) {
 	fmt.Printf("Original:\n%s", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace:         "monitoring",
+		Namespace:         "monitoring",
 		GenerationContext: &GenerationContext{},
 	}
 	fragment, err = Process(fragment, ctx, &uniqueRewriteTagState{})
@@ -63,21 +63,20 @@ func TestTagsRewrittenOk(t *testing.T) {
 
 	assert.Equal(t, rule1.Param("tag"), filter1.Tag)
 	assert.Equal(t, rule2.Param("tag"), filter2.Tag)
-	assert.True(t, strings.Index(filter1.Tag, macroUniqueTag) < 0)
-	assert.True(t, strings.Index(filter2.Tag, macroUniqueTag) < 0)
+	assert.True(t, !strings.Contains(filter1.Tag, macroUniqueTag))
+	assert.True(t, !strings.Contains(filter2.Tag, macroUniqueTag))
 	assert.NotEqual(t, strings.Split(filter1.Tag, ".")[0], "notifications")
 	assert.NotEqual(t, strings.Split(filter2.Tag, ".")[0], "notifications")
 
 	match := fragment[3]
 
 	assert.Equal(t, strings.Split(filter1.Tag, ".error")[0], strings.Split(match.Tag, ".**")[0])
-	assert.True(t, strings.Index(match.Tag, macroUniqueTag) < 0)
+	assert.True(t, !strings.Contains(match.Tag, macroUniqueTag))
 }
 
 func TestRewriteTagsBadConfig(t *testing.T) {
-
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},

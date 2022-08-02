@@ -2,25 +2,21 @@
 Copyright © 2018 VMware, Inc. All Rights Reserved.
 SPDX-License-Identifier: BSD-2-Clause
 */}}
-{{- if .Values.prometheusEnabled }}
+{{- if .Values.rbac.create }}
 apiVersion: v1
-kind: Service
+kind: ServiceAccount
 metadata:
   labels:
     app: {{ template "fluentd-router.name" . }}
     chart: {{ .Chart.Name }}-{{ .Chart.Version }}
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "24231"
   name: {{ template "fluentd-router.fullname" . }}
-spec:
-  selector:
-    app: {{ template "fluentd-router.name" . }}
-    release: {{ .Release.Name }}
-  ports:
-    - port: 24231
-      name: prometheus
-      targetPort: prometheus
+  {{- if .Values.rbac.serviceAccount.annotations }}
+  annotations: {{ toYaml .Values.rbac.serviceAccount.annotations | nindent 4 }}
+  {{- end }}
+{{ if .Values.imagePullSecret }}
+imagePullSecrets:
+  - name: {{ .Values.imagePullSecret}}
+{{end}}
 {{- end }}

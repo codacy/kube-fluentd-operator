@@ -27,7 +27,7 @@ func TestTagsExpandOk(t *testing.T) {
 		fmt.Printf("Original:\n%s", fragment)
 
 		ctx := &ProcessorContext{
-			Namepsace:         "monitoring",
+			Namespace:         "monitoring",
 			GenerationContext: &GenerationContext{},
 			AllowTagExpansion: true,
 		}
@@ -45,8 +45,8 @@ func TestTagsExpandOk(t *testing.T) {
 		app3 := fragment[2]
 		assert.Equal(t, "kube.monitoring.app3.**", app3.Tag)
 
-		assert.True(t, strings.Index(fragment.String(), "{") < 0)
-		assert.True(t, strings.Index(fragment.String(), "}") < 0)
+		assert.True(t, !strings.Contains(fragment.String(), "{"))
+		assert.True(t, !strings.Contains(fragment.String(), "}"))
 	}
 }
 
@@ -70,7 +70,7 @@ func TestNestedTagsExpandOk(t *testing.T) {
 	fmt.Printf("Original:\n%s", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace:         "monitoring",
+		Namespace:         "monitoring",
 		GenerationContext: &GenerationContext{},
 		AllowTagExpansion: true,
 	}
@@ -89,14 +89,13 @@ func TestNestedTagsExpandOk(t *testing.T) {
 	app3 := fragment[1].Nested[2]
 	assert.Equal(t, "kube.monitoring.app3.**", app3.Tag)
 
-	assert.True(t, strings.Index(fragment.String(), "{") < 0)
-	assert.True(t, strings.Index(fragment.String(), "}") < 0)
+	assert.True(t, !strings.Contains(fragment.String(), "{"))
+	assert.True(t, !strings.Contains(fragment.String(), "}"))
 }
 
 func TestTagsExpandBadConfig(t *testing.T) {
-
 	ctx := &ProcessorContext{
-		Namepsace:         "monitoring",
+		Namespace:         "monitoring",
 		AllowTagExpansion: true,
 	}
 

@@ -20,7 +20,7 @@ type expandThisnsMacroState struct {
 
 func (p *expandThisnsMacroState) Process(input fluentd.Fragment) (fluentd.Fragment, error) {
 	f := func(d *fluentd.Directive, ctx *ProcessorContext) error {
-		namespace := ctx.Namepsace
+		namespace := ctx.Namespace
 
 		if d.Name != "match" &&
 			d.Name != "filter" {
@@ -47,7 +47,7 @@ func (p *expandThisnsMacroState) Process(input fluentd.Fragment) (fluentd.Fragme
 			return nil
 		}
 
-		s := strings.Replace(d.Tag, macroThisns, goodPrefix, -1)
+		s := strings.ReplaceAll(d.Tag, macroThisns, goodPrefix)
 
 		if !strings.HasPrefix(s, goodPrefix+".") {
 			return fmt.Errorf("bad tag for <%s>: %s. Tag must start with **, $thisns or %s", d.Name, d.Tag, namespace)

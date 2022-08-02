@@ -20,7 +20,11 @@ type fixDestinations struct {
 }
 
 func makeSafeBufferPath(ctx *ProcessorContext, origBufPath string) string {
-	return fmt.Sprintf("/var/log/kfo-%s-%s-%s.buf", util.MakeFluentdSafeName(ctx.DeploymentID), ctx.Namepsace, util.Hash("", origBufPath))
+	// make a custom buffer path directory if BufferMountFolder is set:
+	if ctx.BufferMountFolder != "" {
+		return fmt.Sprintf("/var/log/%s/kfo-%s-%s-%s.buf", ctx.BufferMountFolder, util.MakeFluentdSafeName(ctx.DeploymentID), ctx.Namespace, util.Hash("", origBufPath))
+	}
+	return fmt.Sprintf("/var/log/kfo-%s-%s-%s.buf", util.MakeFluentdSafeName(ctx.DeploymentID), ctx.Namespace, util.Hash("", origBufPath))
 }
 
 func prohibitSources(d *fluentd.Directive, ctx *ProcessorContext) error {

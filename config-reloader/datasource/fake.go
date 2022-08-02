@@ -4,7 +4,7 @@
 package datasource
 
 import (
-	"fmt"
+	"context"
 	"strings"
 	"time"
 
@@ -20,7 +20,7 @@ var template = `
   buffer_type    file
   buffer_path    /var/log/logzio-$my_ns.buffer
   flush_interval 10s
-  buffer_chunk_limit 1m 
+  buffer_chunk_limit 1m
 </match>
 `
 
@@ -30,13 +30,13 @@ type fakeDatasource struct {
 
 func makeFakeConfig(namespace string) string {
 	contents := template
-	contents = strings.Replace(contents, "$ns$", namespace, -1)
-	contents = strings.Replace(contents, "$ts$", fmt.Sprintf("%s", time.Now()), -1)
+	contents = strings.ReplaceAll(contents, "$ns$", namespace)
+	contents = strings.ReplaceAll(contents, "$ts$", time.Now().String())
 
 	return contents
 }
 
-func (d *fakeDatasource) GetNamespaces() ([]*NamespaceConfig, error) {
+func (d *fakeDatasource) GetNamespaces(ctx context.Context) ([]*NamespaceConfig, error) {
 	res := []*NamespaceConfig{}
 
 	for _, ns := range []string{"kube-system", "monitoring", "csp-main"} {
@@ -62,12 +62,12 @@ func (d *fakeDatasource) WriteCurrentConfigHash(namespace string, hash string) {
 	d.hashes[namespace] = hash
 }
 
-func (d *fakeDatasource) UpdateStatus(namespace string, status string) {
+func (d *fakeDatasource) UpdateStatus(ctx context.Context, namespace string, status string) {
 	logrus.Infof("Setting status of namespace %s to %s", namespace, status)
 }
 
 // NewFakeDatasource returns a predefined set of namespaces + configs
-func NewFakeDatasource() Datasource {
+func NewFakeDatasource(ctx context.Context) Datasource {
 	return &fakeDatasource{
 		hashes: make(map[string]string),
 	}

@@ -38,6 +38,7 @@ func TestSafeLabel(t *testing.T) {
 	assert.Equal(t, "_abc_", safeLabelValue("-abc-"))
 	assert.Equal(t, "abc___", safeLabelValue("abc..."))
 	assert.Equal(t, "abc_def", safeLabelValue("abc.def"))
+	assert.Equal(t, "app_kubernetes_io/name=nginx_ingress", safeLabelValue("app.kubernetes.io/name=nginx-ingress"))
 }
 
 func TestLabelsParseNotOk(t *testing.T) {
@@ -55,12 +56,12 @@ func TestLabelsParseNotOk(t *testing.T) {
 		"$labels(a=*)",
 		"$labels(a=1, =2)",
 		"$labels(_container=)", // empty container name
+		"$labels(app.kubernetes.io/name=*)",
 	}
 
 	for _, tag := range inputs {
 		res, err := parseTagToLabels(tag)
 		assert.NotNil(t, err, "Got this instead for %s: %+v", tag, res)
-
 	}
 }
 
@@ -81,7 +82,7 @@ func TestLabelNoLabels(t *testing.T) {
 	fmt.Printf("Original:\n%s\n", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},
@@ -114,7 +115,7 @@ func TestLabelWithLabels(t *testing.T) {
 	fmt.Printf("Original:\n%s\n", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},
@@ -190,7 +191,7 @@ func TestLabelWithLabelsAndElse(t *testing.T) {
 	fmt.Printf("Original:\n%s\n", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},
@@ -224,7 +225,7 @@ func TestLabelWithLabelsAndContainer(t *testing.T) {
 	fmt.Printf("Original:\n%s\n", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},

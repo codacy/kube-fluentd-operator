@@ -1,0 +1,102 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    async (1.30.1)
+      console (~> 1.10)
+      nio4r (~> 2.3)
+      timers (~> 4.1)
+    async-http (0.54.0)
+      async (~> 1.25)
+      async-io (~> 1.28)
+      async-pool (~> 0.2)
+      protocol-http (~> 0.21.0)
+      protocol-http1 (~> 0.13.0)
+      protocol-http2 (~> 0.14.0)
+    async-io (1.28.0)
+      async (~> 1.14)
+    async-pool (0.2.0)
+      async (~> 1.8)
+    bigdecimal (3.1.1)
+    console (1.14.0)
+      fiber-local
+    date (3.2.2)
+    did_you_mean (1.3.0)
+    e2mmap (0.1.0)
+    ext_monitor (0.1.2)
+    fiber-local (1.0.0)
+    forwardable (1.3.2)
+    json (2.6.1)
+    logger (1.3.0)
+    matrix (0.1.0)
+    mutex_m (0.1.0)
+    net-telnet (0.2.0)
+    nio4r (2.5.2)
+    ostruct (0.1.0)
+    power_assert (1.1.3)
+    prime (0.1.2)
+      forwardable
+      singleton
+    protocol-hpack (1.4.1)
+    protocol-http (0.21.0)
+    protocol-http1 (0.13.0)
+      protocol-http (~> 0.19)
+    protocol-http2 (0.14.0)
+      protocol-hpack (~> 1.4)
+      protocol-http (~> 0.18)
+    psych (4.0.3)
+      stringio
+    rake (13.0.6)
+    rdoc (6.4.0)
+      psych (>= 4.0.0)
+    resolv (0.2.1)
+    rexml (3.2.5)
+    rss (0.2.7)
+    singleton (0.1.1)
+    stringio (3.0.1)
+    sync (0.5.0)
+    thwait (0.2.0)
+      e2mmap
+    timers (4.3.3)
+    unf_ext (0.0.8)
+    webrick (1.7.0)
+    xmlrpc (0.3.0)
+
+PLATFORMS
+  x86_64-darwin-20
+
+DEPENDENCIES
+  async (= 1.30.1)
+  async-http (= 0.54.0)
+  async-io (= 1.28.0)
+  async-pool (= 0.2.0)
+  bigdecimal
+  bundler (>= 2.2.32)
+  date (~> 3.2.1)
+  did_you_mean (= 1.3.0)
+  ext_monitor (= 0.1.2)
+  json (= 2.6.1)
+  logger (= 1.3.0)
+  matrix (= 0.1.0)
+  mutex_m (= 0.1.0)
+  net-telnet (= 0.2.0)
+  nio4r (= 2.5.2)
+  ostruct (= 0.1.0)
+  power_assert (= 1.1.3)
+  prime
+  protocol-hpack (= 1.4.1)
+  protocol-http (= 0.21.0)
+  protocol-http1 (= 0.13.0)
+  protocol-http2 (= 0.14.0)
+  rake (= 13.0.6)
+  rdoc (>= 6.3.3)
+  resolv (= 0.2.1)
+  rexml (= 3.2.5)
+  rss (= 0.2.7)
+  sync (= 0.5.0)
+  thwait
+  unf_ext
+  webrick
+  xmlrpc (= 0.3.0)
+
+BUNDLED WITH
+   2.3.4

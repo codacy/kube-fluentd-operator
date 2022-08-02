@@ -25,7 +25,7 @@ type expandLabelsMacroState struct {
 	BaseProcessorState
 }
 
-var reSafe = regexp.MustCompile("[.-]|^$")
+var reSafe = regexp.MustCompile(`[.-]|^$`)
 
 // got this value from running kubectl with bad args
 // error: invalid label value: "test=-asdf": a valid label must be an empty string
@@ -33,8 +33,8 @@ var reSafe = regexp.MustCompile("[.-]|^$")
 // an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is
 // '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?'
 
-var reValidLabelName = regexp.MustCompile("^([A-Za-z0-9][-A-Za-z0-9\\/_.]*)?[A-Za-z0-9]$")
-var reValidLabelValue = regexp.MustCompile("^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+var reValidLabelName = regexp.MustCompile(`^([A-Za-z0-9][-A-Za-z0-9\/_.]*)?[A-Za-z0-9]$`)
+var reValidLabelValue = regexp.MustCompile(`^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$`)
 
 var fns = template.FuncMap{
 	"last": func(x int, a interface{}) bool {
@@ -51,7 +51,7 @@ var retagTemplate = template.Must(template.New("retagTemplate").Funcs(fns).Parse
     kubernetes_pod_label_values {{range $i, $e := .Labels -}}${record.dig('kubernetes','labels','{{$e}}')&.gsub(/[.-]/, '_') || '_'}{{if last $i $.Labels }}{{else}}.{{end}}{{- end}}
   </record>
 </filter>
-  
+
 <match {{.Pattern}}>
   @type rewrite_tag_filter
   <rule>
@@ -68,7 +68,6 @@ var retagTemplate = template.Must(template.New("retagTemplate").Funcs(fns).Parse
 `))
 
 func parseTagToLabels(tag string) (map[string]string, error) {
-
 	if !strings.HasPrefix(tag, macroLabels+"(") &&
 		!strings.HasSuffix(tag, ")") {
 		return nil, fmt.Errorf("bad $labels macro use: %s", tag)
@@ -199,7 +198,7 @@ func (p *expandLabelsMacroState) Process(input fluentd.Fragment) (fluentd.Fragme
 			return nil
 		}
 
-		d.Tag = makeTagFromFilter(ctx.Namepsace, sortedLabelNames, labelNames)
+		d.Tag = makeTagFromFilter(ctx.Namespace, sortedLabelNames, labelNames)
 		ctx.GenerationContext.augmentTag(d)
 		return nil
 	}
@@ -210,7 +209,7 @@ func (p *expandLabelsMacroState) Process(input fluentd.Fragment) (fluentd.Fragme
 		Pattern string
 		Labels  []string
 	}{
-		fmt.Sprintf("kube.%s.*.*", p.Context.Namepsace),
+		fmt.Sprintf("kube.%s.*.*", p.Context.Namespace),
 		sortedLabelNames,
 	}
 	writer := &bytes.Buffer{}
