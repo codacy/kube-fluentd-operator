@@ -4,6 +4,7 @@
 package controller
 
 import (
+	"context"
 	"time"
 
 	"github.com/vmware/kube-fluentd-operator/config-reloader/config"
@@ -15,16 +16,17 @@ import (
 )
 
 type Controller struct {
-	Updater    Updater
-	OutputDir  string
-	Reloader   *fluentd.Reloader
-	Datasource datasource.Datasource
-	Generator  *generator.Generator
+	Updater          Updater
+	OutputDir        string
+	Reloader         *fluentd.Reloader
+	Datasource       datasource.Datasource
+	Generator        *generator.Generator
+	NumTotalConfigNS int
 }
 
-func (c *Controller) Run(stop <-chan struct{}) {
+func (c *Controller) Run(ctx context.Context, stop <-chan struct{}) {
 	for {
-		err := c.RunOnce()
+		err := c.RunOnce(ctx)
 		if err != nil {
 			logrus.Error(err)
 		}
@@ -39,30 +41,31 @@ func (c *Controller) Run(stop <-chan struct{}) {
 }
 
 // New creates new controller
-func New(cfg *config.Config) (*Controller, error) {
+func New(ctx context.Context, cfg *config.Config) (*Controller, error) {
 	var ds datasource.Datasource
 	var up Updater
 	var err error
 	var reloader *fluentd.Reloader
 
-	if cfg.Datasource == "fake" {
-		ds = datasource.NewFakeDatasource()
-		up = NewFixedTimeUpdater(cfg.IntervalSeconds)
-	} else if cfg.Datasource == "fs" {
-		ds = datasource.NewFileSystemDatasource(cfg.FsDatasourceDir, cfg.OutputDir)
-		up = NewFixedTimeUpdater(cfg.IntervalSeconds)
-	} else {
+	switch cfg.Datasource {
+	case "fake":
+		ds = datasource.NewFakeDatasource(ctx)
+		up = NewFixedTimeUpdater(ctx, cfg.IntervalSeconds)
+	case "fs":
+		ds = datasource.NewFileSystemDatasource(ctx, cfg.FsDatasourceDir, cfg.OutputDir)
+		up = NewFixedTimeUpdater(ctx, cfg.IntervalSeconds)
+	default:
 		updateChan := make(chan time.Time, 1)
-		ds, err = datasource.NewKubernetesInformerDatasource(cfg, updateChan)
+		ds, err = datasource.NewKubernetesInformerDatasource(ctx, cfg, updateChan)
 		if err != nil {
 			return nil, err
 		}
-		reloader = fluentd.NewReloader(cfg.FluentdRPCPort)
-		up = NewOnDemandUpdater(updateChan)
+		reloader = fluentd.NewReloader(ctx, cfg.FluentdRPCPort)
+		up = NewOnDemandUpdater(ctx, updateChan)
 	}
 
-	gen := generator.New(cfg)
-	gen.SetStatusUpdater(ds)
+	gen := generator.New(ctx, cfg)
+	gen.SetStatusUpdater(ctx, ds)
 
 	return &Controller{
 		Updater:    up,
@@ -73,23 +76,25 @@ func New(cfg *config.Config) (*Controller, error) {
 	}, nil
 }
 
-func (c *Controller) RunOnce() error {
+func (c *Controller) RunOnce(ctx context.Context) error {
 	logrus.Infof("Running main control loop")
 
-	allNamespaces, err := c.Datasource.GetNamespaces()
+	allConfigNamespaces, err := c.Datasource.GetNamespaces(ctx)
 	if err != nil {
 		return err
 	}
 
-	c.Generator.SetModel(allNamespaces)
-	configHashes, err := c.Generator.RenderToDisk(c.OutputDir)
+	c.Generator.SetModel(allConfigNamespaces)
+	configHashes, err := c.Generator.RenderToDisk(ctx, c.OutputDir)
 	if err != nil {
 		return nil
 	}
 
 	needsReload := false
 
-	for _, nsConfig := range allNamespaces {
+	logrus.Debugf("Config hashes returned in RunOnce loop: %v", configHashes)
+
+	for _, nsConfig := range allConfigNamespaces {
 		newHash, found := configHashes[nsConfig.Name]
 		if !found {
 			logrus.Infof("No config updates for namespace %s", nsConfig.Name)
@@ -101,6 +106,13 @@ func (c *Controller) RunOnce() error {
 			needsReload = true
 			c.Datasource.WriteCurrentConfigHash(nsConfig.Name, newHash)
 		}
+	}
+
+	// lastly, if number of configs has changed, then need to reload configurations obviously!
+	// this means a crd was deleted or reapplied, and GetNamespaces does not return it anymore
+	if c.NumTotalConfigNS != len(allConfigNamespaces) {
+		needsReload = true
+		c.NumTotalConfigNS = len(allConfigNamespaces)
 	}
 
 	if needsReload {

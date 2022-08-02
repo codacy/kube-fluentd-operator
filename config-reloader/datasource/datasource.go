@@ -4,6 +4,7 @@
 package datasource
 
 import (
+	"context"
 	"sort"
 
 	core "k8s.io/api/core/v1"
@@ -40,7 +41,6 @@ type NamespaceConfig struct {
 	Name               string
 	FluentdConfig      string
 	PreviousConfigHash string
-	IsKnownFromBefore  bool
 	MiniContainers     []*MiniContainer
 	Labels             map[string]string
 }
@@ -48,13 +48,13 @@ type NamespaceConfig struct {
 // StatusUpdater sets an error description on the namespace
 // in case configuration cannot be applied or an empty string otherwise
 type StatusUpdater interface {
-	UpdateStatus(namespace string, status string)
+	UpdateStatus(ctx context.Context, namespace string, status string)
 }
 
 // Datasource reads data from k8s
 type Datasource interface {
 	StatusUpdater
-	GetNamespaces() ([]*NamespaceConfig, error)
+	GetNamespaces(ctx context.Context) ([]*NamespaceConfig, error)
 	WriteCurrentConfigHash(namespace string, hash string)
 }
 
@@ -102,8 +102,8 @@ func convertPodToMinis(resp *core.PodList) []*MiniContainer {
 				ContainerID: cid,
 			}
 
-			for _, vm := range cont.VolumeMounts {
-				m := makeVolume(pod.Spec.Volumes, &vm)
+			for i := range cont.VolumeMounts {
+				m := makeVolume(pod.Spec.Volumes, &cont.VolumeMounts[i])
 				if m != nil {
 					mini.HostMounts = append(mini.HostMounts, m)
 				}

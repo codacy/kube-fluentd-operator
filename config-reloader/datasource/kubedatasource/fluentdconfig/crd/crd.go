@@ -17,16 +17,16 @@ import (
 )
 
 type manager interface {
-	ApplyCRD() error
-	CheckCRD() (bool, error)
-	GetCRDName() string
+	ApplyCRD(context.Context) error
+	CheckCRD(context.Context) (bool, error)
+	GetCRDName(context.Context) string
 }
 
 // CheckAndInstallCRDs checks whether the CRD is already defined in the cluster
 // and, if not, install it and waits for it to be available
-// It will automatically install either the legacy v1beta1 CRD or the neq v1 CRD
+// It will automatically install either the legacy v1beta1 CRD or the new v1 CRD
 // based on the available APIs in the Kubernetes cluster
-func CheckAndInstallCRD(config *rest.Config) error {
+func CheckAndInstallCRD(ctx context.Context, config *rest.Config) error {
 	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
 		return err
@@ -44,15 +44,15 @@ func CheckAndInstallCRD(config *rest.Config) error {
 		crdManager = &v1beta1Manager{clientset}
 	}
 
-	if err := crdManager.ApplyCRD(); err != nil {
+	if err := crdManager.ApplyCRD(ctx); err != nil {
 		return err
 	}
 
-	logrus.Infof("%s CRD is installed. Checking availability...", crdManager.GetCRDName())
+	logrus.Infof("%s CRD is installed. Checking availability...", crdManager.GetCRDName(ctx))
 	if err := monitorCRDAvailability(crdManager); err != nil {
 		return err
 	}
-	logrus.Infof("%s CRD is available", crdManager.GetCRDName())
+	logrus.Infof("%s CRD is available", crdManager.GetCRDName(ctx))
 
 	return nil
 }
@@ -95,7 +95,7 @@ func monitorCRDAvailability(crdManager manager) error {
 	defer cancel()
 
 	for {
-		ok, err := crdManager.CheckCRD()
+		ok, err := crdManager.CheckCRD(ctx)
 		if err != nil {
 			return err
 		}
@@ -105,15 +105,13 @@ func monitorCRDAvailability(crdManager manager) error {
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("%s CRD has not become available before timeout", crdManager.GetCRDName())
+			return fmt.Errorf("%s CRD has not become available before timeout", crdManager.GetCRDName(ctx))
 		case <-time.After(time.Second):
 		}
 	}
 }
 
-//////////////////////////////////////////////////
-///////////////// v1 CRD Manager /////////////////
-//////////////////////////////////////////////////
+// ////////////// v1 CRD Manager /////////////////
 
 var fluentdConfigCRD = v1.CustomResourceDefinition{
 	ObjectMeta: metav1.ObjectMeta{
@@ -127,7 +125,7 @@ var fluentdConfigCRD = v1.CustomResourceDefinition{
 		},
 		Scope: v1.NamespaceScoped,
 		Versions: []v1.CustomResourceDefinitionVersion{
-			v1.CustomResourceDefinitionVersion{
+			{
 				Name:    "v1beta1",
 				Served:  true,
 				Storage: true,
@@ -135,10 +133,10 @@ var fluentdConfigCRD = v1.CustomResourceDefinition{
 					OpenAPIV3Schema: &v1.JSONSchemaProps{
 						Type: "object",
 						Properties: map[string]v1.JSONSchemaProps{
-							"spec": v1.JSONSchemaProps{
+							"spec": {
 								Type: "object",
 								Properties: map[string]v1.JSONSchemaProps{
-									"fluentconf": v1.JSONSchemaProps{
+									"fluentconf": {
 										Type: "string",
 									},
 								},
@@ -155,16 +153,16 @@ type v1Manager struct {
 	clientset *clientset.Clientset
 }
 
-func (m *v1Manager) ApplyCRD() error {
-	if _, err := m.clientset.ApiextensionsV1().CustomResourceDefinitions().Create(&fluentdConfigCRD); err != nil && !errors.IsAlreadyExists(err) {
+func (m *v1Manager) ApplyCRD(ctx context.Context) error {
+	if _, err := m.clientset.ApiextensionsV1().CustomResourceDefinitions().Create(ctx, &fluentdConfigCRD, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
 	return nil
 }
 
-func (m *v1Manager) CheckCRD() (bool, error) {
-	crd, err := m.clientset.ApiextensionsV1().CustomResourceDefinitions().Get(m.GetCRDName(), metav1.GetOptions{})
+func (m *v1Manager) CheckCRD(ctx context.Context) (bool, error) {
+	crd, err := m.clientset.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, m.GetCRDName(ctx), metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -177,13 +175,11 @@ func (m *v1Manager) CheckCRD() (bool, error) {
 	return false, nil
 }
 
-func (m *v1Manager) GetCRDName() string {
+func (m *v1Manager) GetCRDName(ctx context.Context) string {
 	return fluentdConfigCRD.ObjectMeta.Name
 }
 
-///////////////////////////////////////////////////
-/////////////// v1beta1 CRD Manager ///////////////
-///////////////////////////////////////////////////
+// ////////////// v1beta1 CRD Manager ///////////////
 
 var legacyFluentdConfigCRD = v1beta1.CustomResourceDefinition{
 	ObjectMeta: metav1.ObjectMeta{
@@ -199,10 +195,10 @@ var legacyFluentdConfigCRD = v1beta1.CustomResourceDefinition{
 			OpenAPIV3Schema: &v1beta1.JSONSchemaProps{
 				Type: "object",
 				Properties: map[string]v1beta1.JSONSchemaProps{
-					"spec": v1beta1.JSONSchemaProps{
+					"spec": {
 						Type: "object",
 						Properties: map[string]v1beta1.JSONSchemaProps{
-							"fluentconf": v1beta1.JSONSchemaProps{
+							"fluentconf": {
 								Type: "string",
 							},
 						},
@@ -212,7 +208,7 @@ var legacyFluentdConfigCRD = v1beta1.CustomResourceDefinition{
 		},
 		Scope: v1beta1.NamespaceScoped,
 		Versions: []v1beta1.CustomResourceDefinitionVersion{
-			v1beta1.CustomResourceDefinitionVersion{
+			{
 				Name:    "v1beta1",
 				Served:  true,
 				Storage: true,
@@ -225,16 +221,16 @@ type v1beta1Manager struct {
 	clientset *clientset.Clientset
 }
 
-func (m *v1beta1Manager) ApplyCRD() error {
-	if _, err := m.clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(&legacyFluentdConfigCRD); err != nil && !errors.IsAlreadyExists(err) {
+func (m *v1beta1Manager) ApplyCRD(ctx context.Context) error {
+	if _, err := m.clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(ctx, &legacyFluentdConfigCRD, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
 	return nil
 }
 
-func (m *v1beta1Manager) CheckCRD() (bool, error) {
-	crd, err := m.clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(m.GetCRDName(), metav1.GetOptions{})
+func (m *v1beta1Manager) CheckCRD(ctx context.Context) (bool, error) {
+	crd, err := m.clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(ctx, m.GetCRDName(ctx), metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -247,6 +243,6 @@ func (m *v1beta1Manager) CheckCRD() (bool, error) {
 	return false, nil
 }
 
-func (m *v1beta1Manager) GetCRDName() string {
+func (m *v1beta1Manager) GetCRDName(ctx context.Context) string {
 	return legacyFluentdConfigCRD.ObjectMeta.Name
 }

@@ -26,7 +26,7 @@ func TestThisnsExpandOk(t *testing.T) {
 	<match **>
 	  @type null
 	</match>
-	
+
 	<filter **>
 		@type record_transformer
 		enable_ruby true
@@ -54,7 +54,7 @@ func TestThisnsExpandOk(t *testing.T) {
 	fmt.Printf("Original:\n%s", fragment)
 
 	ctx := &ProcessorContext{
-		Namepsace:         "monitoring",
+		Namespace:         "monitoring",
 		GenerationContext: &GenerationContext{},
 	}
 	fragment, err = Process(fragment, ctx, &expandThisnsMacroState{})
@@ -70,13 +70,12 @@ func TestThisnsExpandOk(t *testing.T) {
 	prefix := fragment[2]
 	assert.Equal(t, "kube.monitoring.**", prefix.Tag)
 
-	assert.True(t, strings.Index(fragment.String(), "$thisns") < 0)
+	assert.True(t, !strings.Contains(fragment.String(), "$thisns"))
 }
 
 func TestThisnsExpandBadConfig(t *testing.T) {
-
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 	}
 
 	list := []string{
