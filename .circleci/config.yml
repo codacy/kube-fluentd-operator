@@ -20,9 +20,9 @@ jobs:
           name: Save docker image
           command: mkdir target && docker save --output target/docker-image.tar codacy/$CIRCLE_PROJECT_REPONAME:$(cat .version)
       - persist_to_workspace:
+          root: ~/workdir
           paths:
-            - workdir/target
-          root: ~/
+            - target/
 
   docker_push:
     executor: codacy/machine
