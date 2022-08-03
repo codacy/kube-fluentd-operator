@@ -73,5 +73,6 @@ workflows:
             - docker_push
       - codacy/tag_version:
           name: tag_version
+          context: CodacyAWS
           requires:
             - helm_push_external
