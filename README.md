@@ -1,16 +1,16 @@
-# kube-fluentd-operator  [![Build Status](https://travis-ci.org/vmware/kube-fluentd-operator.svg?branch=master)](https://travis-ci.org/vmware/kube-fluentd-operator)
+# kube-fluentd-operator (KFO)  [![Build Status](https://travis-ci.org/vmware/kube-fluentd-operator.svg?branch=master)](https://travis-ci.org/vmware/kube-fluentd-operator)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware/kube-fluentd-operator)](https://goreportcard.com/report/github.com/vmware/kube-fluentd-operator)
 
 ## Overview
 
-TL;DR: a sane, no-brainer K8S+Helm distribution of Fluentd with batteries included, config validation, no needs to restart, with sensible defaults and best practices built-in. Use Kubernetes labels to filter/route logs!
+Kubernetes Fluentd Operator (KFO) is a Fluentd config manager with batteries included, config validation, no needs to restart, with sensible defaults and best practices built-in. Use Kubernetes labels to filter/route logs per namespace!
 
-*kube-fluentd-operator* configures Fluentd in a Kubernetes environment. It compiles a Fluentd configuration from configmaps (one per namespace) - similar to how an Ingress controller would compile nginx configuration from several Ingress resources. This way only one instance of Fluentd can handle all log shipping while the cluster admin need NOT coordinate with namespace admins.
+*kube-fluentd-operator* configures Fluentd in a Kubernetes environment. It compiles a Fluentd configuration from configmaps (one per namespace) - similar to how an Ingress controller would compile nginx configuration from several Ingress resources. This way only one instance of Fluentd can handle all log shipping for an entire cluster and the cluster admin does NOT need to coordinate with namespace admins.
 
-Cluster administrators set up Fluentd once only and namespace owners can configure log routing as they wish. *kube-fluentd-operator* will re-configure Fluentd accordingly and make sure logs originating from a namespace will not be accessible by other tenants/namespaces.
+Cluster administrators set up Fluentd only once and namespace owners can configure log routing as they wish. *KFO* will re-configure Fluentd accordingly and make sure logs originating from a namespace will not be accessible by other tenants/namespaces.
 
-*kube-fluentd-operator* also extends the Fluentd configuration language making it possible to refer to pods based on their labels and the container. This enables for very fined-grained targeting of log streams for the purpose of pre-processing before shipping.
+*KFO* also extends the Fluentd configuration language making it possible to refer to pods based on their labels and the container name pattern. This enables for very fined-grained targeting of log streams for the purpose of pre-processing before shipping. Writing a custom processor, adding a new Fluentd plugin, or writing a custom Fluentd plugin allow KFO to be extendable for any use case and any external logging ingestion system.
 
 Finally, it is possible to ingest logs from a file on the container filesystem. While this is not recommended, there are still legacy or misconfigured apps that insist on logging to the local filesystem.
 
@@ -20,20 +20,20 @@ The easiest way to get started is using the Helm chart. Official images are not 
 
 ```bash
 git clone git@github.com:vmware/kube-fluentd-operator.git
-helm install --name kfo ./kube-fluentd-operator/log-router \
+helm install kfo ./kube-fluentd-operator/charts/log-router \
   --set rbac.create=true \
-  --set image.tag=v1.12.0 \
+  --set image.tag=v1.16.7 \
   --set image.repository=vmware/kube-fluentd-operator
 ```
 
 Alternatively, deploy the Helm chart from a Github release:
 
 ```bash
-CHART_URL='https://github.com/vmware/kube-fluentd-operator/releases/download/v1.12.0/log-router-0.3.3.tgz'
+CHART_URL='https://github.com/vmware/kube-fluentd-operator/releases/download/v1.16.7/log-router-0.4.0.tgz'
 
-helm install --name kfo ${CHART_URL} \
+helm install kfo ${CHART_URL} \
   --set rbac.create=true \
-  --set image.tag=v1.12.0 \
+  --set image.tag=v1.16.7 \
   --set image.repository=vmware/kube-fluentd-operator
 ```
 
@@ -53,7 +53,7 @@ kubectl create configmap fluentd-config --namespace demo --from-file=fluent.conf
 
 
 # The following step is optional: the fluentd-config is the default configmap name.
-# kubectl annotate demo logging.csp.vmware.com/fluentd-configmap=fluentd-config
+# kubectl annotate namespace demo logging.csp.vmware.com/fluentd-configmap=fluentd-config
 
 ```
 
@@ -88,26 +88,28 @@ To see kube-fluentd-operator in action you need a cloud log collector like logz.
 
 ## Build
 
-Get the code using `go get`:
+Get the code using `go get` or git clone this repo:
 
 ```bash
 go get -u github.com/vmware/kube-fluentd-operator/config-reloader
 cd $GOPATH/src/github.com/vmware/kube-fluentd-operator
 
 # build a base-image
-cd base-image && make
+cd base-image && make build-image
 
 # build helm chart
-cd log-router && make
+cd charts/log-router && make helm-package
 
 # build the daemon
 cd config-reloader
-# get vendor/ deps, you need to have "dep" tool installed
-make dep
 make install
+make build-image
 
 # run with mock data (loaded from the examples/ folder)
-make run-local-fs
+make run-once-fs
+
+# run with mock data in a loop (may need to ctrl+z to exit)
+make run-loop-fs
 
 # inspect what is generated from the above command
 ls -l tmp/
@@ -115,7 +117,7 @@ ls -l tmp/
 
 ### Project structure
 
-* `log-router`: Builds the Helm chart
+* `charts/log-router`: Builds the Helm chart
 * `base-image`: Builds a Fluentd 1.2.x image with a curated list of plugins
 * `config-reloader`: Builds the daemon that generates fluentd configuration files
 
@@ -269,6 +271,107 @@ A very useful feature is the `<filter>` and the `$labels` macro to define parsin
 
 The above config will pipe all logs from the pods labelled with `app=log-router` through a [logfmt](https://github.com/vmware/kube-fluentd-operator/blob/master/base-image/plugins/parser_logfmt.rb) parser before sending them to loggly. Again, this configuration is valid in any namespace. If the namespace doesn't contain any `log-router` components then the `<filter>` directive is never activated. The `_container` is sort of a "meta" label and it allows for targeting the log stream of a specific container in a multi-container pod.
 
+If you use [Kubernetes recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/) for the pods and deployments, then KFO will rewrite `.` characters into `_`.
+
+For example, let's assume the following labels exist in the fluentd-config in the `testing` namespace:
+
+This label `$labels(_container=nginx-ingress-controller)` will filter by container name pattern. The label will convert to this for example: `kube.testing.*.nginx-ingress-controller._labels.*.*.`
+
+This label `$labels(app.kubernetes.io/name=nginx-ingress, _container=nginx-ingress-controller)` converts to this `kube.testing.*.nginx-ingress-controller._labels.*.nginx_ingress`.
+
+This label `$labels(app.kubernetes.io/name=nginx-ingress)` converts to this `$labels(kube.testing*.*._labels.*.nginx_ingress)`.
+
+This fluentd configmap in the `testing` namespace:
+
+```xml
+<filter **>
+  @type concat
+  timeout_label @DISTILLERY_TYPES
+  key message
+  stream_identity_key cont_id
+  multiline_start_regexp /^(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}|\[\w+\]\s|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|=\w+ REPORT====|\d{2}\:\d{2}\:\d{2}\.\d{3})/
+  flush_interval 10
+</filter>
+
+<match **>
+  @type relabel
+  @label @DISTILLERY_TYPES
+</match>
+
+<label @DISTILLERY_TYPES>
+  <filter $labels(app_kubernetes_io/name=kafka)>
+    @type parser
+    key_name log
+    format json
+    reserve_data true
+    suppress_parse_error_log true
+  </filter>
+
+  <filter $labels(app.kubernetes.io/name=nginx-ingress, _container=controller)>
+    @type parser
+    key_name log
+
+    <parse>
+      @type json
+      reserve_data true
+      time_format %FT%T%:z
+      emit_invalid_record_to_error false
+    </parse>
+  </filter>
+
+  <match $labels(tag=noisy)>
+    @type null
+  </match>
+</label>
+```
+
+will be rewritten inside of KFO pods as this:
+
+```xml
+<filter kube.testing.**>
+  @type concat
+  flush_interval 10
+  key message
+  multiline_start_regexp /^(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}|\[\w+\]\s|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|=\w+ REPORT====|\d{2}\:\d{2}\:\d{2}\.\d{3})/
+  stream_identity_key cont_id
+  timeout_label @-DISTILLERY_TYPES-0e93f964a5b5f1760278744f1adf55d58d0e78ba
+</filter>
+
+<match kube.testing.**>
+  @label @-DISTILLERY_TYPES-0e93f964a5b5f1760278744f1adf55d58d0e78ba
+  @type relabel
+</match>
+
+<match kube.testing.**>
+  @label @-DISTILLERY_TYPES-0e93f964a5b5f1760278744f1adf55d58d0e78ba
+  @type null
+</match>
+
+<label @-DISTILLERY_TYPES-0e93f964a5b5f1760278744f1adf55d58d0e78ba>
+  <filter kube.testing.*.*._labels.*.kafka.*>
+    @type parser
+    format json
+    key_name log
+    reserve_data true
+    suppress_parse_error_log true
+  </filter>
+  <filter kube.testing.*.controller._labels.nginx_ingress.*.*>
+    @type parser
+    key_name log
+
+    <parse>
+      @type json
+      emit_invalid_record_to_error false
+      reserve_data true
+      time_format %FT%T%:z
+    </parse>
+  </filter>
+  <match kube.testing.*.*._labels.*.*.noisy>
+    @type null
+  </match>
+</label>
+```
+
 All plugins that change the fluentd tag are disabled for security reasons. Otherwise a rogue configuration may divert other namespace's logs to itself by prepending its name to the tag.
 
 ### Ingest logs from a file in the container
@@ -328,10 +431,15 @@ Also, users don't need to bother with setting the correct `stream` parameter. *k
 
 ### Reusing output plugin definitions (since v1.6.0)
 
-Sometimes you only have a few valid options for log sinks: a dedicated S3 bucket, the ELK stack you manage, etc. The only flexibility you're after is letting namespace owners filter and parse their logs. In such cases you can abstract over an output plugin configuration - basically reducing it to a simple name which can be referenced from any namespace. For example, let's assume you have an S3 bucket for a "test" environement and you use loggly for a "staging" environment. The first thing you do is define these two output in the *admin* namespace:
+Sometimes you only have a few valid options for log sinks: a dedicated S3 bucket, the ELK stack you manage, etc. The only flexibility you're after is letting namespace owners filter and parse their logs. In such cases you can abstract over an output plugin configuration - basically reducing it to a simple name which can be referenced from any namespace. For example, let's assume you have an S3 bucket for a "test" environment and you use loggly for a "staging" environment. The first thing you do is define these two output in the *admin* namespace:
 
 ```xml
 admin-ns.conf:
+<match systemd.** docker kube.kube-system.** k8s.**>
+  @type loggly
+  loggly_url https://logs-01.loggly.com/inputs/TOKEN/tag/fluentd
+</match>
+
 <plugin test>
   @type s3
   aws_key_id  YOUR_AWS_KEY_ID
@@ -345,6 +453,8 @@ admin-ns.conf:
   loggly_url https://logs-01.loggly.com/inputs/TOKEN/tag/fluentd
 </plugin>
 ```
+
+In the above example for the admin configuration, the `match` directive is first defined to direct where to send logs for the `systemd`, `docker`, `kube-system`, and kubernetes control plane components. Below the `match` directive we have defined the `plugin` directives which define the log sinks that can be reused by namespace configurations.
 
 A namespace can refer to the `staging` and `test` plugins oblivious to the fact where exactly the logs end up:
 
@@ -490,6 +600,34 @@ All logs originating from a file look exactly as all other Kubernetes logs. Howe
 }
 ```
 
+### Custom resource definition(CRD) support (since v1.13.0)
+Custom resources are introduced from v1.13.0 release onwards. It allows to have a dedicated resource for fluentd configurations, which enables to manage them in a more consistent way and move away from the generic ConfigMaps.
+It is possible to create configs for a new application simply by attaching a FluentdConfig resource to the application manifests, rather than using a more generic ConfigMap with specific names and/or labels.
+
+```xml
+apiVersion: logs.vdp.vmware.com/v1beta1
+kind: FluentdConfig
+metadata:
+  name: fd-config
+spec:
+  fluentconf: |
+    <match kube.ns.**>
+      @type relabel
+      @label @NOTIFICATIONS
+    </match>
+
+    <label @NOTIFICATIONS>
+     <match **>
+       @type null
+     </match>
+    </label>
+```
+The "crd" has been introduced as a new datasource, configurable through the helm chart values, to allow users that are currently set up with ConfigMaps and do not want to perform the switchover to FluentdConfigs, to be able to keep on using them. The config-reloader has been equipped with the capability of installing the CRD at startup if requested, so no manual actions to enable it on the cluster are needed.
+The existing configurations though ConfigMaps can be migrated to CRDs through the following migration flow
+
+* A new user, who is installing kube-fluentd-operator for the first time, should set the datasource: crd option in the chart. This enables the crd support
+* A user who is already using kube-fluentd-operator with either datasource: default or datasource: multimap will have update to the new chart and set the 'crdMigrationMode' property to 'true'. This enables the config-reloader to launch with the crd datasource and the legacy datasource (either default or multimap depending on what was configured in the datasource property). The user can slowly migrate one by one all configmap resources to the corresponding fluentdconfig resources. When the migration is complete, the Helm release can be upgraded by changing the 'crdMigrationMode' property to 'false' and switching the datasource property to 'crd'. This will effectively disable the legacy datasource and set the config-reloader to only watch fluentdconfig resources.
+
 ## Tracking Fluentd version
 
 This projects tries to keep up with major releases for [Fluentd docker image](https://github.com/fluent/fluentd-docker-image/).
@@ -502,56 +640,71 @@ This projects tries to keep up with major releases for [Fluentd docker image](ht
 | 1.2.6                      | 1.8.0                   |
 | 1.5.2                      | 1.10.0                  |
 | 1.9.1                      | 1.12.0                  |
-
-## Plugins in latest release (1.12.0)
+| 1.12.2                     | 1.14.0                  |
+| 1.12.3                     | 1.14.1                  |
+| 1.13.0                     | 1.15.0                  |
+| 1.13.1                     | 1.15.1                  |
+| 1.13.3                     | 1.15.2                  |
+| 1.14.0                     | 1.15.3                  |
+| 1.14.1                     | 1.16.0                  |
+| 1.14.2                     | 1.16.1                  |
+| 1.14.2                     | 1.16.2                  |
+| 1.14.4                     | 1.16.3                  |
+| 1.14.4                     | 1.16.4                  |
+| 1.14.4                     | 1.16.5                  |
+| 1.14.6                     | 1.16.6                  |
+| 1.14.6                     | 1.16.7                  |
+## Plugins in latest release (1.16.7)
 
 `kube-fluentd-operator` aims to be easy to use and flexible. It also favors sending logs to multiple destinations using `<copy>` and as such comes with many plugins pre-installed:
 
+* fluentd (1.14.4)
 * fluent-config-regexp-type (1.0.0)
 * fluent-mixin-config-placeholders (0.4.0)
-* fluent-plugin-amqp (0.13.0)
-* fluent-plugin-azure-loganalytics (0.4.1)
-* fluent-plugin-cloudwatch-logs (0.8.0)
-* fluent-plugin-concat (2.4.0)
-* fluent-plugin-datadog (0.12.0)
-* fluent-plugin-detect-exceptions (0.0.13)
-* fluent-plugin-elasticsearch (4.0.5)
+* fluent-plugin-amqp (0.14.0)
+* fluent-plugin-azure-loganalytics (0.7.0)
+* fluent-plugin-cloudwatch-logs (0.14.2)
+* fluent-plugin-concat (2.5.0)
+* fluent-plugin-datadog (0.14.0)
+* fluent-plugin-detect-exceptions (0.0.14) - forked to allow fluentd v1 plugin api
+* fluent-plugin-elasticsearch (5.1.0)
 * fluent-plugin-gelf-hs (1.0.8)
-* fluent-plugin-google-cloud (0.4.10)
-* fluent-plugin-grafana-loki (1.2.11)
-* fluent-plugin-grok-parser (2.6.1)
+* fluent-plugin-google-cloud (0.13.0) - forked to allow fluentd v1.14.x
+* fluent-plugin-grafana-loki (1.2.16)
+* fluent-plugin-grok-parser (2.6.2)
 * fluent-plugin-json-in-json-2 (1.0.2)
-* fluent-plugin-kafka (0.12.4)
-* fluent-plugin-kinesis (3.2.1)
+* fluent-plugin-kafka (0.17.2)
+* fluent-plugin-kinesis (3.4.1)
 * fluent-plugin-kubernetes (0.3.1)
-* fluent-plugin-kubernetes_metadata_filter (2.4.2)
+* fluent-plugin-kubernetes_metadata_filter (2.10.0)
 * fluent-plugin-kubernetes_sumologic (2.4.2)
 * fluent-plugin-logentries (0.2.10)
-* fluent-plugin-loggly (0.0.9)
-* fluent-plugin-logzio (0.0.20)
+* fluent-plugin-loggly (1.0.0) - forked to fix for new fluentd api
+* fluent-plugin-logzio (0.0.21)
 * fluent-plugin-mail (0.3.0)
-* fluent-plugin-mongo (1.3.0)
+* fluent-plugin-mongo (1.5.0)
 * fluent-plugin-multi-format-parser (1.0.0)
+* fluent-plugin-mysqlslowquery (0.0.9)
 * fluent-plugin-out-http (1.3.3)
 * fluent-plugin-papertrail (0.2.8)
-* fluent-plugin-prometheus (1.7.3)
+* fluent-plugin-prometheus (2.0.2)
 * fluent-plugin-record-modifier (2.1.0)
 * fluent-plugin-record-reformer (0.9.1)
-* fluent-plugin-redis (0.3.4)
+* fluent-plugin-redis (0.3.5)
 * fluent-plugin-remote_syslog (1.0.0)
-* fluent-plugin-rewrite-tag-filter (2.2.0)
+* fluent-plugin-rewrite-tag-filter (2.4.0)
 * fluent-plugin-route (1.0.0)
-* fluent-plugin-s3 (1.3.0)
-* fluent-plugin-scribe (1.0.0)
+* fluent-plugin-s3 (1.6.1)
 * fluent-plugin-secure-forward (0.4.5)
-* fluent-plugin-splunkhec (2.0)
-* fluent-plugin-sumologic_output (1.6.1)
-* fluent-plugin-systemd (1.0.2)
+* fluent-plugin-splunkhec (2.1)
+* fluent-plugin-splunk-hec (1.2.10)
+* fluent-plugin-sumologic_output (1.7.2)
+* fluent-plugin-systemd (1.0.5)
 * fluent-plugin-uri-parser (0.3.0)
 * fluent-plugin-verticajson (0.0.6)
-* fluent-plugin-vmware-loginsight (0.1.7)
-* fluent-plugin-vmware-log-intelligence (2.0.0)
-* fluentd (1.9.1)
+* fluent-plugin-vmware-log-intelligence (2.0.6)
+* fluent-plugin-vmware-loginsight (1.0.0)
+* fluent-plugin-webhdfs (1.5.0)
 
 When customizing the image be careful not to uninstall plugins that are used internally to implement the macros.
 
@@ -574,14 +727,17 @@ Flags:
   --master=""                   The Kubernetes API server to connect to (default: auto-detect)
   --kubeconfig=""               Retrieve target cluster configuration from a Kubernetes
                                 configuration file (default: auto-detect)
-  --datasource=default          Datasource to use
+  --datasource=default          Datasource to use (default|fake|fs|multimap|crd)
+  --crd-migration-mode          Enable the crd datasource together with the current datasource to facilitate the migration (used only with --datasource=default|multimap)
   --fs-dir=FS-DIR               If datasource=fs is used, configure the dir hosting the files
   --interval=60                 Run every x seconds
   --allow-file                  Allow @type file for namespace configuration
   --id="default"                The id of this deployment. It is used internally so that two
                                 deployments don't overwrite each other's data
   --fluentd-rpc-port=24444      RPC port of Fluentd
-  --log-level="info"            Control verbosity of log
+  --log-level="info"            Control verbosity of config-reloader logs
+  --fluentd-loglevel="info"     Control verbosity of fluentd logs
+  --buffer-mount-folder=""      Folder in /var/log/{} where to create all fluentd buffers
   --annotation="logging.csp.vmware.com/fluentd-configmap"
                                 Which annotation on the namespace stores the configmap name?
   --default-configmap="fluentd-config"
@@ -617,7 +773,9 @@ Flags:
 | `image.tag`                              | Image tag                | `latest`                          |
 | `image.pullPolicy`                       | Pull policy                 | `Always`                             |
 | `image.pullSecret`                       | Optional pull secret name                 | `""`                                |
-| `logLevel`                               | Default log level                 | `info`                               |
+| `logLevel`                               | Default log level for config-reloader                | `info`                               |
+| `fluentdLogLevel`                        | Default log level for fluentd               | `info`                               |
+| `bufferMountFolder`                      | Folder in /var/log/{} where to create all fluentd buffers               | `""`                               |
 | `kubeletRoot`                            | The home dir of the kubelet, usually set using `--root-dir` on the kubelet           | `/var/lib/kubelet`                               |
 | `namespaces`                             | List of namespaces to operate on. Empty means all namespaces                 | `[]`                               |
 | `interval`                               | How often to check for config changes (seconds)                 | `45`          |
@@ -687,7 +845,7 @@ On the bright side, the configuration of `noisy-namespace` contains nothing spec
 Your cluster is running under RBAC. You need to enable a serviceaccount for the log-router pods. It's easy when using the Helm chart:
 
 ```bash
-helm install ./log-router --set rbac.create=true ...
+helm install ./charts/log-router --set rbac.create=true ...
 ```
 
 ### I have a legacy container that logs to /var/log/httpd/access.log
@@ -736,7 +894,7 @@ spec:
   - name: logs
     emptyDir: {}
 ```
-To get the hello.log ingested by Fluetd you need at least this in the configuration for `kfo-test` namespace:
+To get the hello.log ingested by Fluentd you need at least this in the configuration for `kfo-test` namespace:
 
 ```xml
 <source>
@@ -885,12 +1043,12 @@ Use `<label>` as usual, the daemon ensures that label names are unique cluster-w
 ```xml
 <match $labels(app=foo)>
   @type relabel
-  @label blackhole
+  @label @blackhole
 </match>
 
 <match $labels(app=bar)>
   @type relabel
-  @label blackhole
+  @label @blackhole
 </match>
 
 <label @blackhole>
@@ -1007,7 +1165,7 @@ If you don't like this default name or happen to use this configmap for other pu
 
 Use `--annotation=acme.com/fancy-config` to use acme.com/fancy-config as annotation name. However, you'd also need to customize the Helm chart. Patches are welcome!
 
-## Known issues
+## Known Issues
 
 Currently space-delimited tags are not supported. For example, instead of `<filter a b>`, you need to use `<filter a>` and `<filter b>`.
 This limitation will be addressed in a later version.

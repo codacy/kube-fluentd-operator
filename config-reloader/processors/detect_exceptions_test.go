@@ -13,7 +13,7 @@ import (
 
 func TestRewrite(t *testing.T) {
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},
@@ -53,9 +53,8 @@ func TestRewrite(t *testing.T) {
 }
 
 func TestWithoutExceptions(t *testing.T) {
-
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},
@@ -91,9 +90,8 @@ func TestWithoutExceptions(t *testing.T) {
 }
 
 func TestWithExceptions(t *testing.T) {
-
 	ctx := &ProcessorContext{
-		Namepsace: "monitoring",
+		Namespace: "monitoring",
 		GenerationContext: &GenerationContext{
 			ReferencedBridges: map[string]bool{},
 		},

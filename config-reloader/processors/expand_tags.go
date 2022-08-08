@@ -21,14 +21,13 @@ type expandTagsState struct {
 func (p *expandTagsState) Process(input fluentd.Fragment) (fluentd.Fragment, error) {
 	if p.Context.AllowTagExpansion {
 		return p.ProcessExpandingTags(input)
-	} else {
-		return p.ProcessNotExpandingTags(input)
 	}
+
+	return p.ProcessNotExpandingTags(input)
 }
 
 func (p *expandTagsState) ProcessExpandingTags(input fluentd.Fragment) (fluentd.Fragment, error) {
 	f := func(d *fluentd.Directive, ctx *ProcessorContext) ([]*fluentd.Directive, error) {
-
 		if d.Name != "match" && d.Name != "filter" {
 			return []*fluentd.Directive{d}, nil
 		}
@@ -130,12 +129,11 @@ func applyRecursivelyWithState(directives fluentd.Fragment, ctx *ProcessorContex
 
 func (p *expandTagsState) ProcessNotExpandingTags(input fluentd.Fragment) (fluentd.Fragment, error) {
 	f := func(d *fluentd.Directive, ctx *ProcessorContext) error {
-
 		if d.Name != "match" && d.Name != "filter" {
 			return nil
 		}
 
-		if strings.Index(d.Tag, "{") >= 0 {
+		if strings.Contains(d.Tag, "{") {
 			return fmt.Errorf("Processing of {...} pattern in tags is disabled")
 		}
 

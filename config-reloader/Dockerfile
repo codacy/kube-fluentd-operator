@@ -1,21 +1,19 @@
-# Copyright © 2018 VMware, Inc. All Rights Reserved.
+# Copyright © 2022 VMware, Inc. All Rights Reserved.
 # SPDX-License-Identifier: BSD-2-Clause
 
-
 # builder image
-FROM golang:1.10 as builder
+FROM golang:1.17.9 as builder
 
 WORKDIR /go/src/github.com/vmware/kube-fluentd-operator/config-reloader
-RUN go get -u github.com/golang/dep/cmd/dep
 COPY . .
 
 # Speed up local builds where vendor is populated
-RUN [ -d vendor/github.com ] || make dep; true
 ARG VERSION
-RUN make test
+# Good to have another test run as this container is different than lint container
+RUN make in-docker-test
 RUN make build VERSION=$VERSION
 
-# always use the unpushable image
+# always use the un-pushable image
 FROM vmware/base-fluentd-operator:latest
 
 COPY templates /templates

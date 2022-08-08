@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  codacy: codacy/base@1.0.0
+  codacy: codacy/base@9.0.0
 
 jobs:
   build_image:
@@ -9,7 +9,7 @@ jobs:
     working_directory: ~/workdir
     steps:
       - attach_workspace:
-          at: ~/
+          at: ~/workdir
       - run:
           name: Build base docker image
           command: make -C base-image
@@ -20,16 +20,16 @@ jobs:
           name: Save docker image
           command: mkdir target && docker save --output target/docker-image.tar codacy/$CIRCLE_PROJECT_REPONAME:$(cat .version)
       - persist_to_workspace:
+          root: ~/workdir
           paths:
-            - workdir/target
-          root: ~/
+            - target/
 
   docker_push:
     executor: codacy/machine
     working_directory: ~/workdir
     steps:
       - attach_workspace:
-          at: ~/
+          at: ~/workdir
       - run:
           name: Load docker image
           command: docker load --input target/docker-image.tar
@@ -45,7 +45,7 @@ workflows:
       - codacy/checkout_and_version
       - codacy/helm_aws:
           name: helm_lint
-          cmd: helm lint log-router
+          cmd: helm lint charts/log-router
           requires:
             - codacy/checkout_and_version
       - build_image:
@@ -66,11 +66,12 @@ workflows:
           name: helm_push_external
           context: CodacyHelm
           chart_name: log-router
-          helm_dir: ./
+          helm_dir: ./charts
           charts_repo_url: "https://charts.codacy.com/external"
           requires:
             - docker_push
       - codacy/tag_version:
           name: tag_version
+          context: CodacyAWS
           requires:
             - helm_push_external

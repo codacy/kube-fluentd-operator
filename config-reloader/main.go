@@ -4,17 +4,22 @@
 package main
 
 import (
-	"github.com/vmware/kube-fluentd-operator/config-reloader/config"
-	"github.com/vmware/kube-fluentd-operator/config-reloader/controller"
-	"github.com/vmware/kube-fluentd-operator/config-reloader/fluentd"
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/vmware/kube-fluentd-operator/config-reloader/config"
+	"github.com/vmware/kube-fluentd-operator/config-reloader/controller"
+	"github.com/vmware/kube-fluentd-operator/config-reloader/fluentd"
+	"github.com/vmware/kube-fluentd-operator/config-reloader/metrics"
 
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
+	ctx := context.Background()
 	cfg := &config.Config{}
 
 	if err := cfg.ParseFlags(os.Args[1:]); err != nil {
@@ -29,7 +34,7 @@ func main() {
 	}
 
 	if cfg.FluentdValidateCommand != "" {
-		validator := fluentd.NewValidator(cfg.FluentdValidateCommand)
+		validator := fluentd.NewValidator(ctx, cfg.FluentdValidateCommand, time.Second*time.Duration(cfg.ExecTimeoutSeconds))
 		if err := validator.EnsureUsable(); err != nil {
 			logrus.Fatalf("Bad validate command used: '%s', either use correct one or none at all: %+v",
 				cfg.FluentdValidateCommand, err)
@@ -38,20 +43,31 @@ func main() {
 
 	logrus.SetLevel(cfg.GetLogLevel())
 
-	ctrl, err := controller.New(cfg)
+	ctrl, err := controller.New(ctx, cfg)
 	if err != nil {
 		logrus.Fatalf("Cannot start control loop %+v", err)
 	}
 
+	// Add this for a timeout between 0-120 seconds (default: 30 (ExecTimeoutSeconds))
+	// This is for golang/fluentd race condition when KFO starts/restarts:
+	if cfg.ExecTimeoutSeconds > 0 && cfg.ExecTimeoutSeconds <= 120 {
+		logrus.Infof("Sleeping for %v seconds in order for fluentd to be ready.", cfg.ExecTimeoutSeconds)
+		time.Sleep(time.Second * time.Duration(cfg.ExecTimeoutSeconds))
+	}
+
 	if cfg.IntervalSeconds == 0 {
-		ctrl.RunOnce()
+		ctrl.RunOnce(ctx)
 		return
 	}
 
 	stopChan := make(chan struct{}, 1)
 	go handleSigterm(stopChan)
 
-	ctrl.Run(stopChan)
+	if cfg.PrometheusEnabled {
+		metrics.InitMetrics(cfg.MetricsPort)
+	}
+
+	ctrl.Run(ctx, stopChan)
 }
 
 func handleSigterm(stopChan chan struct{}) {

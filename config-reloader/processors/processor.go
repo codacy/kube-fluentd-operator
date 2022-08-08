@@ -16,7 +16,7 @@ const (
 )
 
 // GenerationContext holds state for one loop of the controller.
-// It is shared accross all processors and all encountered namespaces.
+// It is shared across all processors and all encountered namespaces.
 // Different processorts can share state using this class.
 // Use this class sparingly.
 type GenerationContext struct {
@@ -34,15 +34,16 @@ func (g *GenerationContext) augmentTag(d *fluentd.Directive) {
 	d.Tag = augmentTag(orig)
 }
 
-// ProcessorContext is how a processor gets an environemnt to operate in.
+// ProcessorContext is how a processor gets an environment to operate in.
 // It is both the model and the workspace of a processor.
 type ProcessorContext struct {
-	Namepsace         string
+	Namespace         string
 	NamespaceLabels   map[string]string
 	AllowFile         bool
 	DeploymentID      string
 	MiniContainers    []*datasource.MiniContainer
 	KubeletRoot       string
+	BufferMountFolder string
 	GenerationContext *GenerationContext
 	AllowTagExpansion bool
 }
@@ -58,7 +59,7 @@ type FragmentProcessor interface {
 	SetContext(*ProcessorContext)
 
 	// Prepare may define directives that are applied to the main fluentd file
-	// The results of all registered processors are concatenated ans included in fluentd.conf
+	// The results of all registered processors are concatenated and included in fluentd.conf
 	Prepare(fluentd.Fragment) (fluentd.Fragment, error)
 
 	// Process defines directives that are put in their own ns-{namespace}.conf file

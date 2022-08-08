@@ -1,20 +1,22 @@
 package datasource
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vmware/kube-fluentd-operator/config-reloader/config"
 	"github.com/vmware/kube-fluentd-operator/config-reloader/datasource/kubedatasource"
 
+	kfoListersV1beta1 "github.com/vmware/kube-fluentd-operator/config-reloader/datasource/kubedatasource/fluentdconfig/client/listers/logs.vdp.vmware.com/v1beta1"
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
@@ -29,15 +31,16 @@ type kubeInformerConnection struct {
 	kubeds  kubedatasource.KubeDS
 	nslist  listerv1.NamespaceLister
 	podlist listerv1.PodLister
+	cmlist  listerv1.ConfigMapLister
+	fdlist  kfoListersV1beta1.FluentdConfigLister
 }
 
 // GetNamespaces queries the configured Kubernetes API to generate a list of NamespaceConfig objects.
 // It uses options from the configuration to determine which namespaces to inspect and which resources
 // within those namespaces contain fluentd configuration.
-func (d *kubeInformerConnection) GetNamespaces() ([]*NamespaceConfig, error) {
-
-	// Get a list of the namespaces which may contain fluentd configuration
-	nses, err := d.discoverNamespaces()
+func (d *kubeInformerConnection) GetNamespaces(ctx context.Context) ([]*NamespaceConfig, error) {
+	// Get a list of the namespaces which may contain fluentd configuration:
+	nses, err := d.discoverNamespaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +53,7 @@ func (d *kubeInformerConnection) GetNamespaces() ([]*NamespaceConfig, error) {
 			return nil, err
 		}
 
-		configdata, err := d.kubeds.GetFluentdConfig(ns)
+		configdata, err := d.kubeds.GetFluentdConfig(ctx, ns)
 		if err != nil {
 			return nil, err
 		}
@@ -58,6 +61,9 @@ func (d *kubeInformerConnection) GetNamespaces() ([]*NamespaceConfig, error) {
 		// Create a compact representation of the pods running in the namespace
 		// under consideration
 		pods, err := d.podlist.Pods(ns).List(labels.NewSelector())
+		if err != nil {
+			return nil, err
+		}
 		podsCopy := make([]core.Pod, len(pods))
 		for i, pod := range pods {
 			podsCopy[i] = *pod.DeepCopy()
@@ -72,7 +78,6 @@ func (d *kubeInformerConnection) GetNamespaces() ([]*NamespaceConfig, error) {
 			Name:               ns,
 			FluentdConfig:      configdata,
 			PreviousConfigHash: d.hashes[ns],
-			IsKnownFromBefore:  true,
 			Labels:             nsobj.Labels,
 			MiniContainers:     minis,
 		})
@@ -86,50 +91,116 @@ func (d *kubeInformerConnection) WriteCurrentConfigHash(namespace string, hash s
 	d.hashes[namespace] = hash
 }
 
-// UpdateStatus patches a namespace to update the status annotation with the latest result
+// UpdateStatus updates a namespace's status annotation with the latest result
 // from the config generator.
-func (d *kubeInformerConnection) UpdateStatus(namespace string, status string) {
-	patch := &core.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-			Annotations: map[string]string{
-				d.cfg.AnnotStatus: status,
-			},
-		},
+func (d *kubeInformerConnection) UpdateStatus(ctx context.Context, namespace string, status string) {
+	ns, err := d.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		logrus.Infof("Cannot find namespace to update status for: %v", namespace)
 	}
 
-	body, _ := json.Marshal(&patch)
-	_, err := d.client.CoreV1().Namespaces().Patch(namespace, types.MergePatchType, body)
+	// update annotations
+	annotations := ns.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
 
-	logrus.Debugf("Saving status: %+v, %+v", patch, err)
-	if err != nil {
-		logrus.Infof("Cannot set error status of %s: %v", namespace, err)
+	statusAnnotationExists := false
+	if _, ok := annotations[d.cfg.AnnotStatus]; ok {
+		statusAnnotationExists = true
+	}
+
+	// check the annotation status key and add if status not blank
+	if !statusAnnotationExists && status != "" {
+		// not found add it.
+		// only add status if the status key is not ""
+		annotations[d.cfg.AnnotStatus] = status
+	}
+
+	// check if annotation status key exists and remove if status blank
+	if statusAnnotationExists && status == "" {
+		delete(annotations, d.cfg.AnnotStatus)
+	}
+
+	ns.SetAnnotations(annotations)
+
+	_, err = d.client.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
+
+	logrus.Debugf("Saving status annotation to namespace %s: %+v", namespace, err)
+	// errors.IsConflict is safe to ignore since multiple log-routers try update at same time
+	// (only 1 router can update this unique ResourceVersion, no need to retry, each router is a retry process):
+	if err != nil && !errors.IsConflict(err) {
+		logrus.Infof("Cannot set error status on namespace %s: %+v", namespace, err)
 	}
 }
 
 // discoverNamespaces constructs a list of namespaces to inspect for fluentd
-// configuration, using the configured list if provided, otherwise all namespaces are inspected
-func (d *kubeInformerConnection) discoverNamespaces() ([]string, error) {
+// configuration, using the configured list if provided, otherwise find only
+// namespaces that have fluentd configmaps based on default name, and if that fails
+// find all namespace and iterrate through them.
+func (d *kubeInformerConnection) discoverNamespaces(ctx context.Context) ([]string, error) {
 	var namespaces []string
 	if len(d.cfg.Namespaces) != 0 {
 		namespaces = d.cfg.Namespaces
 	} else {
-		nses, err := d.nslist.List(labels.NewSelector())
-		if err != nil {
-			return nil, fmt.Errorf("Failed to list all namespaces: %v", err)
-		}
-		namespaces = make([]string, 0)
-		for _, ns := range nses {
-			namespaces = append(namespaces, ns.ObjectMeta.Name)
+		if d.cfg.Datasource == "crd" {
+			logrus.Infof("Discovering only namespaces that have fluentdconfig crd defined.")
+			if d.fdlist == nil {
+				return nil, fmt.Errorf("Failed to initialize the fluentdconfig crd client, d.fclient = nil")
+			}
+			fcList, err := d.fdlist.List(labels.NewSelector())
+			if err != nil {
+				return nil, fmt.Errorf("Failed to list all fluentdconfig crds in cluster: %v", err)
+			}
+			namespaces = make([]string, 0)
+			for _, crd := range fcList {
+				namespaces = append(namespaces, crd.ObjectMeta.Namespace)
+			}
+			logrus.Debugf("Returned these namespaces for fluentdconfig crds: %v", namespaces)
+		} else {
+			// Find the configmaps that exist on this cluster to find namespaces:
+			confMapsList, err := d.cmlist.List(labels.NewSelector())
+			if err != nil {
+				return nil, fmt.Errorf("Failed to list all configmaps in cluster: %v", err)
+			}
+			// If default configmap name is defined get all namespaces for those configmaps:
+			if d.cfg.DefaultConfigmapName != "" {
+				for _, cfmap := range confMapsList {
+					if cfmap.ObjectMeta.Name == d.cfg.DefaultConfigmapName {
+						namespaces = append(namespaces, cfmap.ObjectMeta.Namespace)
+					}
+				}
+			} else {
+				// get all namespaces and iterrate through them like before:
+				nses, err := d.nslist.List(labels.NewSelector())
+				if err != nil {
+					return nil, fmt.Errorf("Failed to list all namespaces in cluster: %v", err)
+				}
+				namespaces = make([]string, 0)
+				for _, ns := range nses {
+					namespaces = append(namespaces, ns.ObjectMeta.Name)
+				}
+			}
 		}
 	}
-	return namespaces, nil
+	// Remove duplicates (crds can be many in single namespace):
+	nsKeys := make(map[string]bool)
+	nsList := []string{}
+	for _, ns := range namespaces {
+		if _, value := nsKeys[ns]; !value {
+			nsKeys[ns] = true
+			nsList = append(nsList, ns)
+		}
+	}
+	// Sort the namespaces:
+	sort.Strings(nsList)
+	return nsList, nil
 }
 
 // NewKubernetesInformerDatasource builds a new Datasource from the provided config.
 // The returned Datasource uses Informers to efficiently track objects in the kubernetes
 // API by watching for updates to a known state.
-func NewKubernetesInformerDatasource(cfg *config.Config, updateChan chan time.Time) (Datasource, error) {
+func NewKubernetesInformerDatasource(ctx context.Context, cfg *config.Config, updateChan chan time.Time) (Datasource, error) {
 	kubeConfig := cfg.KubeConfig
 	if cfg.KubeConfig == "" {
 		if _, err := os.Stat(clientcmd.RecommendedHomeFile); err == nil {
@@ -152,21 +223,30 @@ func NewKubernetesInformerDatasource(cfg *config.Config, updateChan chan time.Ti
 	factory := informers.NewSharedInformerFactory(client, 0)
 	namespaceLister := factory.Core().V1().Namespaces().Lister()
 	podLister := factory.Core().V1().Pods().Lister()
+	cmLister := factory.Core().V1().ConfigMaps().Lister()
 
 	var kubeds kubedatasource.KubeDS
+	fluentdconfigDSLister :=
+		&kubedatasource.FluentdConfigDS{
+			Fdlist: nil,
+		}
 	if cfg.Datasource == "crd" {
-		kubeds, err = kubedatasource.NewFluentdConfigDS(cfg, kubeCfg, updateChan)
+		kubeds, err = kubedatasource.NewFluentdConfigDS(ctx, cfg, kubeCfg, updateChan)
 		if err != nil {
 			return nil, err
 		}
+		fluentdconfigDSLister =
+			&kubedatasource.FluentdConfigDS{
+				Fdlist: kubeds.GetFdlist(),
+			}
 	} else {
 		if cfg.CRDMigrationMode {
-			kubeds, err = kubedatasource.NewMigrationModeDS(cfg, kubeCfg, factory, updateChan)
+			kubeds, err = kubedatasource.NewMigrationModeDS(ctx, cfg, kubeCfg, factory, updateChan)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			kubeds, err = kubedatasource.NewConfigMapDS(cfg, factory, updateChan)
+			kubeds, err = kubedatasource.NewConfigMapDS(ctx, cfg, factory, updateChan)
 			if err != nil {
 				return nil, err
 			}
@@ -174,10 +254,11 @@ func NewKubernetesInformerDatasource(cfg *config.Config, updateChan chan time.Ti
 	}
 
 	factory.Start(nil)
-	if cache.WaitForCacheSync(nil,
+	if !cache.WaitForCacheSync(nil,
 		factory.Core().V1().Namespaces().Informer().HasSynced,
 		factory.Core().V1().Pods().Informer().HasSynced,
-		kubeds.IsReady) == false {
+		factory.Core().V1().ConfigMaps().Informer().HasSynced,
+		kubeds.IsReady) {
 		return nil, fmt.Errorf("Failed to sync local informer with upstream Kubernetes API")
 	}
 	logrus.Infof("Synced local informer with upstream Kubernetes API")
@@ -189,5 +270,7 @@ func NewKubernetesInformerDatasource(cfg *config.Config, updateChan chan time.Ti
 		kubeds:  kubeds,
 		nslist:  namespaceLister,
 		podlist: podLister,
+		cmlist:  cmLister,
+		fdlist:  fluentdconfigDSLister.Fdlist,
 	}, nil
 }

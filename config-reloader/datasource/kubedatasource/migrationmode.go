@@ -1,9 +1,11 @@
 package kubedatasource
 
 import (
+	"context"
 	"time"
 
 	"github.com/vmware/kube-fluentd-operator/config-reloader/config"
+	kfoListersV1beta1 "github.com/vmware/kube-fluentd-operator/config-reloader/datasource/kubedatasource/fluentdconfig/client/listers/logs.vdp.vmware.com/v1beta1"
 
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/rest"
@@ -17,13 +19,13 @@ type MigrationModeDS struct {
 	cmKubeDS KubeDS
 }
 
-func NewMigrationModeDS(cfg *config.Config, kubeCfg *rest.Config, factory informers.SharedInformerFactory, updateChan chan time.Time) (*MigrationModeDS, error) {
-	fdKubeDS, err := NewFluentdConfigDS(cfg, kubeCfg, updateChan)
+func NewMigrationModeDS(ctx context.Context, cfg *config.Config, kubeCfg *rest.Config, factory informers.SharedInformerFactory, updateChan chan time.Time) (*MigrationModeDS, error) {
+	fdKubeDS, err := NewFluentdConfigDS(ctx, cfg, kubeCfg, updateChan)
 	if err != nil {
 		return nil, err
 	}
 
-	cmKubeDS, err := NewConfigMapDS(cfg, factory, updateChan)
+	cmKubeDS, err := NewConfigMapDS(ctx, cfg, factory, updateChan)
 	if err != nil {
 		return nil, err
 	}
@@ -41,16 +43,21 @@ func (m *MigrationModeDS) IsReady() bool {
 
 // GetFluentdConfig returns the fluentd configs for the given ns extracted
 // by the two KubeDS and concatenated together
-func (m *MigrationModeDS) GetFluentdConfig(namespace string) (string, error) {
-	fdConfigs, err := m.fdKubeDS.GetFluentdConfig(namespace)
+func (m *MigrationModeDS) GetFluentdConfig(ctx context.Context, namespace string) (string, error) {
+	fdConfigs, err := m.fdKubeDS.GetFluentdConfig(ctx, namespace)
 	if err != nil {
 		return "", err
 	}
 
-	cmConfigs, err := m.cmKubeDS.GetFluentdConfig(namespace)
+	cmConfigs, err := m.cmKubeDS.GetFluentdConfig(ctx, namespace)
 	if err != nil {
 		return "", err
 	}
 
 	return cmConfigs + "\n" + fdConfigs, nil
+}
+
+// GetFdlist return nil for this mode because it does not use CRDs:
+func (m *MigrationModeDS) GetFdlist() kfoListersV1beta1.FluentdConfigLister {
+	return nil
 }
