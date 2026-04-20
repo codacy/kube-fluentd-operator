@@ -3,7 +3,7 @@
 # Similar to https://github.com/drecom/docker-centos-ruby/blob/2.6.5-slim/Dockerfile
 
 ARG RVM_PATH=/usr/local/rvm
-ARG RUBY_VERSION=ruby-2.7.6
+ARG RUBY_VERSION=ruby-3.2.0
 ARG RUBY_PATH=/usr/local/rvm/rubies/$RUBY_VERSION
 ARG RUBYOPT='-W:no-deprecated -W:no-experimental'
 
@@ -65,13 +65,13 @@ RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import \
     && bundler install \
     && gem uninstall rake -v 13.0.6 \
     && gem uninstall bigdecimal \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/rexml-3.2.3.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/rdoc-6.2.1.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/json-2.3.0.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/json-2.5.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/webrick-1.6.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/date-3.0.3.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/cgi-0.1.0.1.gemspec
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/rexml-3.2.3.1.gemspec \
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/rdoc-6.2.1.1.gemspec \
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/json-2.3.0.gemspec \
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/json-2.5.1.gemspec \
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/webrick-1.6.1.gemspec \
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/date-3.0.3.gemspec \
+    && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/specifications/default/cgi-0.1.0.1.gemspec
 
 FROM photon:3.0
 ARG RUBY_PATH
@@ -153,11 +153,11 @@ RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins /usr/local/bundle/bin/ \
   && tdnf remove -y $buildDeps \
   && tdnf clean all \
   && gem uninstall google-protobuf --version 3.17.3 --force && gem cleanup \
-  && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/cache $RUBY_PATH/lib/ruby/gems/2.7.0/doc/ /usr/share/doc /root/.bundle/cache
+  && rm -rf $RUBY_PATH/lib/ruby/gems/3.2.0/cache $RUBY_PATH/lib/ruby/gems/3.2.0/doc/ /usr/share/doc /root/.bundle/cache
 
 # Make sure fluentd picks jemalloc 3.6.0 lib as default
 ENV LD_PRELOAD="/usr/lib/libjemalloc.so"
-ENV RUBYLIB="/usr/local/lib/ruby/gems/2.7.0/gems/resolv-0.2.1/lib"
+ENV RUBYLIB="/usr/local/lib/ruby/gems/3.2.0/gems/resolv-0.2.1/lib"
 
 EXPOSE 24444 5140
 COPY plugins /fluentd/plugins
