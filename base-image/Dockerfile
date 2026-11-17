@@ -72,6 +72,7 @@ RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import \
     && gem install json -v '>= 2.6.3' --default --no-document \
     && gem install rexml -v '>= 3.2.5' --no-document \
     && gem install webrick -v '>= 1.8.1' --no-document \
+    && bundle lock --update async-io async-http async async-pool \
     && bundler install \
     && ls -1 $RUBY_PATH/lib/ruby/gems/$RUBY_ABI/specifications/default/
 
@@ -124,7 +125,6 @@ RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins /usr/local/bundle/bin/ \
   && echo 'gem: --no-document' >> /etc/gemrc \
   && bundle config silence_root_warning true \
   && cd /fluentd \
-  && bundle lock --update async-io async-http async async-pool \
   && bundle install \
   && cd /fluentd \
   && git clone https://github.com/Cryptophobia/fluent-plugin-detect-exceptions.git fluent-plugin-detect-exceptions \
