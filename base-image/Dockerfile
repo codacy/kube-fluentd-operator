@@ -3,7 +3,9 @@
 # Similar to https://github.com/drecom/docker-centos-ruby/blob/2.6.5-slim/Dockerfile
 
 ARG RVM_PATH=/usr/local/rvm
-ARG RUBY_VERSION=ruby-2.7.6
+ARG RUBY_VERSION=ruby-3.2.0
+# Ruby ABI version: gems live under lib/ruby/gems/<RUBY_ABI>
+ARG RUBY_ABI=3.2.0
 ARG RUBY_PATH=/usr/local/rvm/rubies/$RUBY_VERSION
 ARG RUBYOPT='-W:no-deprecated -W:no-experimental'
 
@@ -11,7 +13,10 @@ FROM photon:3.0 AS rubybuild
 ARG RVM_PATH
 ARG RUBY_PATH
 ARG RUBY_VERSION
+ARG RUBY_ABI
 ARG RUBYOPT
+# Ruby 3.2's psych no longer bundles libyaml, so libyaml-devel is required to build.
+# libffi-devel is needed for fiddle. gdbm is no longer a default gem in 3.x.
 RUN tdnf clean all && \
     tdnf upgrade -y && \
     tdnf erase -y toybox && \
@@ -33,8 +38,9 @@ RUN tdnf clean all && \
          zlib-devel \
          libedit \
          libedit-devel \
-         gdbm \
-         gdbm-devel \
+         libyaml \
+         libyaml-devel \
+         libffi-devel \
          openssl-devel \
          systemd \
          net-tools \
@@ -42,13 +48,17 @@ RUN tdnf clean all && \
          gpg && \
     tdnf clean all
 
-# Copy Gemfile.lock to pin versions further:
+# Copy Gemfile.lock to pin versions further (regenerate it under Ruby 3.2!):
 COPY basegems/Gemfile Gemfile
 COPY basegems/Gemfile.lock Gemfile.lock
 
 SHELL [ "/bin/bash", "-l", "-c" ]
 
-# Install the gems with bundler is better practice:
+# Install the gems with bundler is better practice.
+# Notes for 3.x:
+#  - webrick and rexml are no longer default gems, so they are installed normally.
+#  - The 2.7-specific default gemspec removals were dropped; the default gem
+#    versions shipped with 3.2.0 are different (json 2.6.3, cgi 0.3.6, etc.).
 RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import \
     && curl -sSL https://rvm.io/pkuczynski.asc | gpg --import \
     && curl -sSL https://get.rvm.io | bash -s stable \
@@ -57,24 +67,17 @@ RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import \
     && rvm requirements \
     && rvm install --disable-binary $RUBY_VERSION --default \
     && gem update --system --no-document \
-    && gem install bundler -v '>= 2.3.4' --default --no-document \
-    && gem install cgi -v '>= 0.1.1' --default --no-document \
-    && gem install rexml -v '>= 3.2.5' --default --no-document \
-    && gem install json -v '>= 2.6.1' --default --no-document \
-    && gem install webrick -v '>= 1.7.0' --default --no-document \
+    && gem install bundler -v '>= 2.4.1' --default --no-document \
+    && gem install cgi -v '>= 0.3.6' --default --no-document \
+    && gem install json -v '>= 2.6.3' --default --no-document \
+    && gem install rexml -v '>= 3.2.5' --no-document \
+    && gem install webrick -v '>= 1.8.1' --no-document \
     && bundler install \
-    && gem uninstall rake -v 13.0.6 \
-    && gem uninstall bigdecimal \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/rexml-3.2.3.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/rdoc-6.2.1.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/json-2.3.0.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/json-2.5.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/webrick-1.6.1.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/date-3.0.3.gemspec \
-    && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/specifications/default/cgi-0.1.0.1.gemspec
+    && ls -1 $RUBY_PATH/lib/ruby/gems/$RUBY_ABI/specifications/default/
 
 FROM photon:3.0
 ARG RUBY_PATH
+ARG RUBY_ABI
 ARG RUBYOPT
 ENV PATH $RUBY_PATH/bin:$PATH
 COPY --from=rubybuild $RUBY_PATH $RUBY_PATH
@@ -92,11 +95,14 @@ ENTRYPOINT ["/fluentd/entrypoint.sh"]
 # Pin all fluentd plugin gem versions with Gemfile.lock here:
 COPY Gemfile /fluentd/Gemfile
 COPY Gemfile.lock /fluentd/Gemfile.lock
+# libyaml and libffi are runtime dependencies of Ruby 3.2 (psych, fiddle),
+# so they are installed outside of buildDeps and are NOT removed afterwards.
 RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins /usr/local/bundle/bin/ \
   && tdnf erase -y toybox \
   && buildDeps="\
      gmp-devel \
      libffi-devel \
+     libyaml-devel \
      bzip2 \
      shadow \
      wget \
@@ -110,12 +116,9 @@ RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins /usr/local/bundle/bin/ \
      gcc \
      build-essential \
      zlib-devel \
-     libedit \
      libedit-devel \
-     gdbm \
-     gdbm-devel \
      openssl-devel" \
-  && tdnf install -y $buildDeps util-linux systemd net-tools findutils \
+  && tdnf install -y $buildDeps libyaml libffi libedit util-linux systemd net-tools findutils \
   && wget https://raw.githubusercontent.com/fluent/fluentd-kubernetes-daemonset/master/docker-image/v1.13/debian-elasticsearch7/plugins/parser_kubernetes.rb -P /fluentd/plugins \
   && wget https://raw.githubusercontent.com/fluent/fluentd-kubernetes-daemonset/master/docker-image/v1.13/debian-elasticsearch7/plugins/parser_multiline_kubernetes.rb -P /fluentd/plugins \
   && echo 'gem: --no-document' >> /etc/gemrc \
@@ -152,12 +155,11 @@ RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins /usr/local/bundle/bin/ \
   && ln -s $(which fluentd) /usr/local/bundle/bin/fluentd \
   && tdnf remove -y $buildDeps \
   && tdnf clean all \
-  && gem uninstall google-protobuf --version 3.17.3 --force && gem cleanup \
-  && rm -rf $RUBY_PATH/lib/ruby/gems/2.7.0/cache $RUBY_PATH/lib/ruby/gems/2.7.0/doc/ /usr/share/doc /root/.bundle/cache
+  && gem cleanup \
+  && rm -rf $RUBY_PATH/lib/ruby/gems/$RUBY_ABI/cache $RUBY_PATH/lib/ruby/gems/$RUBY_ABI/doc/ /usr/share/doc /root/.bundle/cache
 
 # Make sure fluentd picks jemalloc 3.6.0 lib as default
 ENV LD_PRELOAD="/usr/lib/libjemalloc.so"
-ENV RUBYLIB="/usr/local/lib/ruby/gems/2.7.0/gems/resolv-0.2.1/lib"
 
 EXPOSE 24444 5140
 COPY plugins /fluentd/plugins
