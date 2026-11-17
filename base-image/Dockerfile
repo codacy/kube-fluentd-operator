@@ -124,6 +124,7 @@ RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins /usr/local/bundle/bin/ \
   && echo 'gem: --no-document' >> /etc/gemrc \
   && bundle config silence_root_warning true \
   && cd /fluentd \
+  && bundle lock --update async-io async-http async async-pool \
   && bundle install \
   && cd /fluentd \
   && git clone https://github.com/Cryptophobia/fluent-plugin-detect-exceptions.git fluent-plugin-detect-exceptions \
