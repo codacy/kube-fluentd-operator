@@ -72,7 +72,7 @@ RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import \
     && gem install json -v '>= 2.6.3' --default --no-document \
     && gem install rexml -v '>= 3.2.5' --no-document \
     && gem install webrick -v '>= 1.8.1' --no-document \
-    && bundle lock --update rbtree sorted_set bunny fluent-plugin-amqp async-io async-http async async-pool \
+    && bundle lock --update sorted_set bunny fluent-plugin-amqp async-io async-http async async-pool \
     && bundler install \
     && ls -1 $RUBY_PATH/lib/ruby/gems/$RUBY_ABI/specifications/default/
 
