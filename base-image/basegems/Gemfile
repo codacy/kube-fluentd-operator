@@ -27,6 +27,9 @@ gem 'rake', '>= 13.0.6'
 gem 'rdoc', '>= 6.5.0'
 gem 'resolv', '>= 0.2.2'
 gem 'fluentd', '1.16.2'
+gem "google-protobuf", ">= 3.25.5"
+gem "rack", ">= 2.2.25"
+gem "rexml", ">= 3.3.9"
 
 # No longer default gems in Ruby 3.x
 gem 'net-telnet', '0.2.0'
