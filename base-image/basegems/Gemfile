@@ -26,7 +26,8 @@ gem 'rbtree', '>= 0.4.4'
 gem 'rake', '>= 13.0.6'
 gem 'rdoc', '>= 6.5.0'
 gem 'resolv', '>= 0.2.2'
-gem 'fluentd', '1.16.2'
+gem "fluentd", "1.19.3"
+gem 'oj', '3.17.3'
 gem "google-protobuf", ">= 3.25.5"
 gem "rack", ">= 2.2.25"
 gem "activesupport", ">= 8.0.5.2"
@@ -41,4 +42,4 @@ gem 'unf_ext'
 gem "webrick", ">= 1.8.2"
 gem 'xmlrpc', '>= 0.3.2'
 
-gem 'bundler', '>= 2.4.1'
+gem 'bundler', '>= 4.1.0'
