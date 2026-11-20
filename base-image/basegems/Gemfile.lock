@@ -89,7 +89,7 @@ GEM
       aws-sdk-s3 (~> 1.60)
       aws-sdk-sqs (~> 1.23)
       fluentd (>= 0.14.22, < 2)
-    fluentd (1.19.3)
+    fluentd (1.19.4)
       async-http (~> 0.86)
       base64 (~> 0.2)
       bundler
@@ -246,7 +246,7 @@ DEPENDENCIES
   excon (>= 1.5.0)
   faraday (>= 1.10.6)
   fluent-plugin-s3 (>= 1.8.5)
-  fluentd (= 1.19.3)
+  fluentd (= 1.19.4)
   google-protobuf (>= 3.25.5)
   json (>= 2.6.3)
   json-jwt (>= 1.15.3.1)
