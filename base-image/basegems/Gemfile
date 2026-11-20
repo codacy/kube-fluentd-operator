@@ -27,6 +27,9 @@ gem 'rake', '>= 13.0.6'
 gem 'rdoc', '>= 6.5.0'
 gem 'resolv', '>= 0.2.2'
 gem 'fluentd', '1.16.2'
+gem "google-protobuf", ">= 3.25.5"
+gem "rack", ">= 2.2.25"
+gem "activesupport", ">= 8.0.5.2"
 
 # No longer default gems in Ruby 3.x
 gem 'net-telnet', '0.2.0'
@@ -35,7 +38,7 @@ gem 'rss', '>= 0.2.9'
 gem 'sync', '0.5.0'
 gem 'thwait'
 gem 'unf_ext'
-gem 'webrick'
+gem "webrick", ">= 1.8.2"
 gem 'xmlrpc', '>= 0.3.2'
 
 gem 'bundler', '>= 2.4.1'
