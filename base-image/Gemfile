@@ -1,10 +1,12 @@
 source "https://rubygems.org"
 
 # pin fluentd, probably a good idea to pin all gems
-gem "fluentd", "1.19.3"
+gem "fluentd", "1.19.4"
 
 gem 'oj', '3.17.3'
 gem 'ffi'
+gem 'rbtree', '>= 0.4.6'
+gem 'cool.io', '>= 1.8.1'
 gem 'fluent-plugin-amqp', "0.14.0"
 gem 'fluent-plugin-azure-loganalytics', "0.7.0"
 gem 'fluent-plugin-cloudwatch-logs', "0.14.2"
